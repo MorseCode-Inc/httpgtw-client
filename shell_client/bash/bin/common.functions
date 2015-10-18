@@ -1,0 +1,394 @@
+
+
+CLIENT="$BINDIR/client.sh"
+CLIENT_VERBOSE="-v"
+CLIENT_VERBOSE=""		# leave empty to disable verbosity
+
+
+set_source() {
+	export UIM_SOURCE="$1"
+}
+
+set_ci_ipaddress() {
+	export UIM_CI_IPADDRESS="$1"
+}
+
+set_ci_hostname() {
+	export UIM_CI_HOSTNAME="$1"
+}
+
+set_ci_name() {
+	export UIM_CI_NAME="$1"
+}
+
+set_ci_path() {
+	export UIM_CI_PATH="$1"
+}
+
+set_metric_id() {
+	export UIM_METRIC_ID="$1"
+}
+
+set_tnt2() {
+
+	if [ -n "$UIM_CI_IPADDRESS" ]
+	then
+		_TNT2='"ci_ipaddress":"'$UIM_CI_IPADDRESS'",'
+	fi
+
+	if [ -n "$UIM_CI_HOSTNAME" ]
+	then
+		_TNT2="$_TNT2"' "hostname":"'$UIM_CI_HOSTNAME'",'
+	fi
+
+	if [ -n "$UIM_CI_PATH" ]
+	then
+		_TNT2="$_TNT2"' "ci_path":"'$UIM_CI_PATH'",'
+	fi
+	
+	if [ -n "$_METRIC" ]
+	then
+		_TNT2="$_TNT2"' "metric_id":'$_METRIC','
+	fi
+}
+
+
+define_qos() {
+
+_usage() {
+cat << EOF
+                                                        BASH SHELL FUNCTION
+                                                        ----------------------------------
+
+define_qos -flag value [-flag value [-flag value] .. ]
+define_qos -o object -s source -t target -v value
+
+Flags:
+-o object	: QoS Object Name (Must be defined in probe configuration, or use define_qos)
+-d description	: Set the QoS Description
+-u unit		: Set the QoS Unit of measrement example = kbps/s
+-s short	: Set the QoS Unit abbreviation
+-t type		: Set the QoS Type (gauge, counter, counter/s, delta)
+-met id		: Set the QoS metric id (see TNT2 specification) example = 3
+
+
+                                                        ----------------------------------
+                                                        MorseCode Incorporated 2015
+EOF
+}
+
+	_SHORT=""
+	_UNIT=""
+	_OBJECT=""
+	_TYPE="Gauge"
+	_CI_PATH=""
+	_CI_IP=""
+	_CI_HOST=""
+	_METRIC=""
+	_DESCRIPTION=""
+
+	while [ -n "$1" ] && [ -z "${1##-*}" ]
+	do
+ 	
+		OPT="$1"
+		shift
+		case "$OPT" in
+		-s) _SHORT="$1"; shift ;;
+		-u) _UNIT="$1"; shift ;;
+		-o) _OBJECT="$1"; shift ;;
+		-t) _TYPE="$1"; shift ;;
+		-ci) _CI_PATH="$1"; shift ;;
+		-ip) _CI_IP="$1"; shift ;;
+		-host) _CI_HOST="$1"; shift ;;
+		-ciname) _CI_NAME="$1"; shift ;;
+		-met) _METRIC="$1"; shift ;;
+		-d) _DESCRIPTION="$1"; shift ;;
+		-\?|-h|--help)
+			_usage
+			return 0;
+		esac
+	
+	done
+
+	set_tnt2
+
+
+	echo ' { '$_TNT2' "object": "'$_OBJECT'" 
+		, "description": "'$_DESCRIPTION'" 
+		, "unit": "'$_UNIT'" 
+		, "unit_short": "'$_SHORT'" 
+		, "type": "'$_TYPE'" } ' | $CLIENT $CLIENT_VERBOSE -p - qos/definition
+
+}
+
+send_qos() {
+
+_usage() {
+cat << EOF
+                                                        BASH SHELL FUNCTION
+                                                        ----------------------------------
+
+send_qos -flag value [-flag value .. ] target value
+send_qos -o object -s source target value
+
+Flags:
+-o object	: QoS Object Name (Must be defined in probe configuration, or use define_qos)
+-s source	: Set the QoS Source
+-ciname name	: Qualify the Configuration Item Name (shows in USM)
+-host name	: Qualify the QoS with a specific hostname (requires resolvable address or provided IP with -ip)
+-ip address	: Qualify the QoS with a specific ip address (use with -host)
+
+
+                                                        ----------------------------------
+                                                        MorseCode Incorporated 2015
+EOF
+}
+
+	_SOURCE=""
+	_TARGET=""
+	_OBJECT=""
+	_VALUE=""
+	_CI_PATH=""
+	_CI_IP=""
+	_CI_HOST=""
+	_METRIC=""
+
+	while [ -n "$1" ] && [ -z "${1##-*}" ]
+	do
+	 
+		OPT="$1"
+		shift
+		case "$OPT" in
+		-s) _SOURCE="$1"; shift ;;
+		-o) _OBJECT="$1"; shift ;;
+		-ip) _CI_IP="$1"; shift ;;
+		-host) _CI_HOST="$1"; shift ;;
+		-ciname) _CI_NAME="$1"; shift ;;
+		-met) _METRIC="$1"; shift ;;
+		-\?|-h|--help) _usage; return; ;;
+		*)
+			;;
+		esac
+	
+	done
+
+	_TARGET="$1"
+	_VALUE="$2"
+
+	set_tnt2
+
+	if [ -z "$_SOURCE" ]
+	then
+		_SOURCE="$UIM_SOURCE"
+	fi
+
+	if [ -z "$_SOURCE" ]
+	then
+		_SOURCE="$(hostname -s)"
+	fi
+
+	
+	
+	echo ' { '$_TNT2' "source":"'$_SOURCE'"
+		, "object": "'$_OBJECT'" 
+		, "value": '$_VALUE' 
+		, "target": "'$_TARGET'" } ' | $CLIENT $CLIENT_VERBOSE -p - qos/data
+}
+
+robot_heartbeat() {
+
+_usage() {
+cat << EOF
+                                                        BASH SHELL FUNCTION
+                                                        ----------------------------------
+
+robot_heartbeat [options] [source]
+
+Positional Parameters:
+source		: Client source, will default to $(hostname -s) if not specified
+
+Options:
+
+-ciname name	: Qualify the Configuration Item Name (shows in USM)
+-host name	: Qualify the QoS with a specific hostname (requires resolvable address or provided IP with -ip)
+-ip address	: Qualify the QoS with a specific ip address (use with -host)
+-ttl seconds	: Time (in seconds) until probe should consider this client offline, and 
+                  send an alarm.
+
+
+                                                        ----------------------------------
+                                                        MorseCode Incorporated 2015
+EOF
+}
+	_SOURCE=""
+	_CI_NAME=""
+	_CI_IP=""
+	_TNT2=""
+	_TTL="900"
+
+	if [ -z "$_SOURCE" ]
+	then
+		_SOURCE="$(hostname -s)"
+	fi
+
+	while [ -z "${1##-*}" ] && [ -n "$1" ]
+	do
+		OPT="$1"
+		shift
+		case "$OPT" in
+		-ip) _CI_IP="$1"; shift ;;
+		-host) _CI_HOST="$1"; shift ;;
+		-ciname) _CI_NAME="$1"; shift ;;
+		-ttl) 
+			_TTL="$1"
+			shift
+			;;
+		-\?|-h|--help) _usage; return; ;;
+	
+		esac
+	done
+
+	if [ -z "$_TTL" ]
+	then
+		_TTL=900
+	fi
+
+	set_tnt2
+	
+	if [ -n "$1" ]
+	then
+		_SOURCE="$1"
+	fi
+
+
+	echo ' { '$_TNT2' "ttl": '$_TTL' , "source": "'$_SOURCE'" } ' | $CLIENT -p - robot/heartbeat
+
+}
+
+send_alarm() {
+
+_usage() {
+cat << EOF
+                                                        BASH SHELL FUNCTION
+                                                        ----------------------------------
+
+send_alarm [options] severity source message
+
+Positional Parameters:
+severity	: Either integer (0-5) or name: clear, info, warn, major, minor, critical
+source		: Alarm source
+message		: Alarm message text
+
+Options:
+-subsys SID	: Set alarm subsystem id (ex. 1.1.5 = Filesystem)
+		  Expected value is subsystem id, not subsystem name.
+-key		: Set alarm suppression key
+-ci		: TNT2 ci_path (ex. 1.1 = System.Disk)
+-met		: TNT2 metric_id (integer value)
+-ciname name	: Qualify the Configuration Item Name (shows in USM)
+-host name	: Qualify the QoS with a specific hostname (requires resolvable address or provided IP with -ip)
+-ip address	: Qualify the QoS with a specific ip address (use with -host)
+
+
+                                                        ----------------------------------
+                                                        MorseCode Incorporated 2015
+EOF
+}
+
+	if [ -z "$_SOURCE" ]
+	then
+		_SOURCE="$(hostname -s)"
+	fi
+
+	while [ -z "${1##-*}" ] && [ -n "$1" ]
+	do
+		OPT="$1"
+		shift
+		case "$OPT" in
+		-ip) _CI_IP="$1"; shift ;;
+		-host) _CI_HOST="$1"; shift ;;
+		-ciname) _CI_NAME="$1"; shift ;;
+		-subsys) 
+			_SUBSYS="$1"
+			shift
+			;;
+		-key) 
+			_KEY="$1"
+			shift
+			;;
+		-ci) 
+			_CI_PATH="$1"
+			shift
+			;;
+		-met) 
+			_MET_ID="$1"
+			shift
+			;;
+		-\?|-help|--help) 
+			_usage
+			return 0
+			;;
+		-*)
+			echo "Missing parameter or invalid use"
+			_usage
+			return 5
+			;;
+		esac
+	done
+
+
+	_SEVERITY="$1"
+	shift
+	_SOURCE="$1"
+	shift
+
+	set_tnt2
+
+	if [ -z "$_SEVERITY" ]
+	then
+		_SEVERITY="warn"
+	fi
+
+	if [ -z "$_SOURCE" ]
+	then
+		_SOURCE="$(hostname -s)"
+	fi
+
+	if [ -z "$1" ]
+	then
+		set -- "No Message Text"
+	fi
+
+	if [ -z "$_CI_PATH" ]
+	then
+		_CI_PATH="10.1.3"
+	fi
+
+	if [ -z "$_MET_ID" ]
+	then
+		_MET_ID=1
+	fi
+
+
+	echo ' { '$_TNT2'
+		"ttl": '$_TTL' 
+		, "source": "'$_SOURCE'" 
+		, "severity": "'$_SEVERITY'" 
+		, "subsystem": "'$_SUBSYS'" 
+		, "supp_key": "'$_KEY'" 
+		, "ci_path": "'$_CI_PATH'" 
+		, "metric_id": '$_MET_ID'
+		, "message": "'$*'" 
+	} ' | $CLIENT -p - alarm/create
+
+}
+
+
+
+
+
+
+set_source "$(hostname -s)"
+set_ci_ipaddress "10.250.100.153"
+set_ci_hostname "$(hostname -s)"
+set_ci_name "$(hostname -s)"
